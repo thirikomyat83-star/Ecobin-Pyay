@@ -37,7 +37,8 @@ export default function EcoBinWeb() {
   // --- UI States ---
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [scanState, setScanState] = useState<ScanState>('idle');
-  const [detectedObject, setDetectedObject] = useState({ name: '', pts: 0, co2: 0 });
+  // ✅ ပြင်ဆင်ချက်: label?: string ကို Type ထဲတွင် သေချာစွာ ထည့်သွင်းပေးထားပါသည်
+  const [detectedObject, setDetectedObject] = useState<{ name: string; pts: number; co2: number; label?: string }>({ name: '', pts: 0, co2: 0 });
   const [toast, setToast] = useState({ show: false, msg: '', type: 'success' });
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -196,13 +197,14 @@ export default function EcoBinWeb() {
         const data = await res.json();
 
         if (res.ok && data.status === 'success') {
-          // AI မှ အောင်မြင်စွာ ဖတ်နိုင်ခဲ့လျှင်
-         const [detectedObject, setDetectedObject] = useState<{
-  name: string;
-  pts: number;
-  co2: number;
-  label?: string; // ဤလိုင်းကို ထည့်သွင်းပေးပါ
-} | null>(null);
+          // ✅ ပြင်ဆင်ချက်: Hook Error တက်စေမည့် useState အဟောင်းကို ဖယ်ရှားပြီး 
+          // မှန်ကန်သော State Update အဖြစ် ပြောင်းလဲထားပါသည်
+          setDetectedObject({
+            name: data.name,
+            pts: data.pts,
+            co2: data.co2,
+            label: data.label
+          });
           setScanState('identified');
         } else {
           // အမှိုက်ကို သေချာစွာ မဖတ်နိုင်ခဲ့လျှင်
@@ -215,6 +217,7 @@ export default function EcoBinWeb() {
       }
     }, 'image/jpeg', 0.8);
   };
+  
   const confirmWasteDrop = () => {
     setScanState('success');
     stopCamera();
@@ -391,6 +394,7 @@ export default function EcoBinWeb() {
                 {scanState === 'identified' && (
                   <div className="absolute inset-0 bg-teal-900/60 backdrop-blur-sm flex flex-col items-center justify-center p-6 border-[4px] border-teal-400 m-8 rounded-xl">
                     <CheckCircle2 size={64} className="text-white mb-4" />
+                    {/* ✅ ပြင်ဆင်ချက်: label မရှိခဲ့ရင် name ကို အစားထိုးပြရန် fallback ထည့်သွင်းထားပါသည် */}
                     <span className="text-white font-black text-2xl text-center mb-2">{detectedObject.label || detectedObject.name}</span>
                     <span className="bg-white text-teal-700 font-bold px-4 py-1 rounded-full mb-8">+{detectedObject.pts} Pts</span>
                     <button onClick={confirmWasteDrop} className="w-full bg-teal-500 text-white font-bold py-4 rounded-xl shadow-lg text-lg">အမှိုက်ပစ်မည်</button>
