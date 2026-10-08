@@ -1,11 +1,11 @@
 # =====================================================================
-# 1. လိုအပ်သော Packages များကို Install လုပ်ခြင်း
+# 1.
 # =====================================================================
 import os
 import nest_asyncio
 import uvicorn
 import uuid
-from fastapi import FastAPI, HTTPException, UploadFile, File # 💡 YOLO ပုံလက်ခံရန် UploadFile, File ထပ်တိုးထားပါသည်
+from fastapi import FastAPI, HTTPException, UploadFile, File 
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -17,14 +17,14 @@ from langchain_core.prompts import ChatPromptTemplate
 
 # --- LangChain Tools / Core Imports (နေရာအသစ်) ---
 from langchain_core.tools import tool
-from langchain_core.tools import create_retriever_tool  # 💡 ဤနေရာသို့ ပြောင်းလဲသွားပါသည်
+from langchain_core.tools import create_retriever_tool  
 
 # --- Data & Vector Store Imports ---
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader, Docx2txtLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-# --- YOLO & Image Processing Imports (YOLO အတွက် ထပ်တိုး) ---
+
 import cv2
 import numpy as np
 from ultralytics import YOLO
@@ -34,16 +34,16 @@ from roboflow import Roboflow
 from dotenv import load_dotenv
 
 # =====================================================================
-# 2. API Keys များကို .env မှ ဖတ်ယူခြင်း
+# 2. API Keys 
 # =====================================================================
 nest_asyncio.apply()
-load_dotenv() # .env ဖိုင်ထဲမှ Key များကို ဆွဲထုတ်ခြင်း
+load_dotenv() 
 
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 os.environ["OPENAI_API_BASE"] = "https://openrouter.ai/api/v1"
 
 # =====================================================================
-# 3. FastAPI Application စတင်တည်ဆောက်ခြင်း
+# 3. FastAPI Application 
 # =====================================================================
 app = FastAPI(title="EcoBin Pyay Advanced API (Roboflow Cloud Version)")
 
@@ -58,7 +58,7 @@ app.add_middleware(
 USERS_DB = {}
 
 # =====================================================================
-# 4. Roboflow AI Scanner ကို လှမ်းချိတ်ခြင်း
+# 4. Roboflow AI Scanner 
 # =====================================================================
 print("⏳ Loading Roboflow Cloud AI Model...")
 try:
@@ -70,7 +70,7 @@ except Exception as e:
     vision_model = None
 
 # =====================================================================
-# 5. Knowledge Base တည်ဆောက်ခြင်း (RAG)
+# 5. Knowledge Base 
 # =====================================================================
 def setup_knowledge_base():
     data_dir = "./data"
@@ -115,7 +115,7 @@ if kb_retriever:
     ))
 
 # =====================================================================
-# 6. LangChain Tools များ
+# 6. LangChain Tools 
 # =====================================================================
 @tool
 def get_user_stats(user_id: str) -> str:
@@ -183,7 +183,7 @@ async def chat_with_eco_coach(request: ChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail="AI အလုပ်များနေပါသည်။")
 
-# 📸 ပြင်ဆင်ထားသော Roboflow Scan Endpoint (Classification Model အတွက်)
+
 @app.post("/api/scan")
 async def scan_waste(file: UploadFile = File(...)):
     if not vision_model:
@@ -201,11 +201,10 @@ async def scan_waste(file: UploadFile = File(...)):
         print(prediction)
         print("==============================")
 
-        # ယာယီပုံကို ပြန်ဖျက်ခြင်း
         if os.path.exists(temp_filename):
             os.remove(temp_filename)
 
-        # 💡 JSON ထဲမှ class အမည်ကို အမှန်ကန်ဆုံး ဆွဲထုတ်ခြင်း
+       
         class_name = "unknown"
         preds = prediction.get('predictions', [])
         if preds and len(preds) > 0:
@@ -222,7 +221,7 @@ async def scan_waste(file: UploadFile = File(...)):
         points = 0
         co2_saved = 0.0
 
-        # အမှိုက်အမျိုးအစားအလိုက် Point သတ်မှတ်ခြင်း
+        
         if "pet" in class_name or "plastic" in class_name or "bottle" in class_name:
             detected_label, points, co2_saved = "ပလတ်စတစ်ဘူး (PET)", 50, 0.08
         elif "can" in class_name or "metal" in class_name or "alu" in class_name:
@@ -246,11 +245,8 @@ async def scan_waste(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail="Scan ဖတ်ရာတွင် အခက်အခဲရှိနေပါသည်။")
 
 # =====================================================================
-# 9. Server Run ခြင်း
+# 9. Server Run 
 # =====================================================================
 import asyncio
 
 print("🚀 Starting EcoBin API Server on http://0.0.0.0:8000")
-config = uvicorn.Config(app, host="0.0.0.0", port=8000)
-server = uvicorn.Server(config)
-await server.serve()
