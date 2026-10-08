@@ -9,24 +9,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-
-# --- LangChain Agents & Prompts ---
-
 from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate
-
-# --- LangChain Tools ---
 from langchain_core.tools import tool, create_retriever_tool
-
-# --- Data & Vector Store Imports ---
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader, Docx2txtLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 import cv2
 import numpy as np
-
-# --- Roboflow Imports (Cloud AI) ---
 from roboflow import Roboflow
 from dotenv import load_dotenv
 
@@ -97,10 +88,11 @@ def setup_knowledge_base():
     docs = text_splitter.split_documents(documents)
     
     try:
+        # ✅ ပြင်ဆင်ချက်: base_url နှင့် api_key အခေါ်အဝေါ် အမှန်ပြင်ဆင်ထားပါသည်
         embeddings = OpenAIEmbeddings(
             model="text-embedding-3-small",
-            openai_api_base="https://openrouter.ai/api/v1",
-            openai_api_key=OPENAI_API_KEY
+            base_url="https://openrouter.ai/api/v1",
+            api_key=OPENAI_API_KEY
         )
         if docs:
             vector_store = FAISS.from_documents(docs, embeddings)
@@ -140,11 +132,12 @@ tools.extend([get_user_stats, get_app_rewards_info])
 # =====================================================================
 # 7. AI Agent (Eco-Coach)
 # =====================================================================
+# ✅ ပြင်ဆင်ချက်: openai_api_base အစား base_url ကို အသုံးပြုထားပါသည်
 llm = ChatOpenAI(
     model="openai/gpt-4o-mini",
     temperature=0.4,
-    openai_api_base="https://openrouter.ai/api/v1",
-    openai_api_key=OPENAI_API_KEY
+    base_url="https://openrouter.ai/api/v1",
+    api_key=OPENAI_API_KEY
 )
 
 system_instruction = """
@@ -195,6 +188,10 @@ async def chat_with_eco_coach(request: ChatRequest):
         response = agent_executor.invoke({"input": f"[User ID: {request.user_id}] \nUser Message: {request.message}"})
         return {"reply": response["output"]}
     except Exception as e:
+        # ✅ ပြင်ဆင်ချက်: Error အတိအကျကို Log ထဲတွင် ပြပေးရန် ထည့်သွင်းထားပါသည်
+        print("====== AI CHAT ERROR ======")
+        print(e)
+        print("===========================")
         raise HTTPException(status_code=500, detail="AI အလုပ်များနေပါသည်။")
 
 @app.post("/api/scan")
