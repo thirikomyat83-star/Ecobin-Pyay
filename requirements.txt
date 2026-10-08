@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-multipart
+langchain
+langchain-openai
+faiss-cpu
+roboflow
+opencv-python-headless
+nest-asyncio
+python-dotenv
