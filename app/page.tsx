@@ -197,12 +197,12 @@ export default function EcoBinWeb() {
 
         if (res.ok && data.status === 'success') {
           // AI မှ အောင်မြင်စွာ ဖတ်နိုင်ခဲ့လျှင်
-          setDetectedObject({
-            name: data.name,
-            pts: data.pts,
-            co2: data.co2,
-            label: data.label
-          });
+         const [detectedObject, setDetectedObject] = useState<{
+  name: string;
+  pts: number;
+  co2: number;
+  label?: string; // ဤလိုင်းကို ထည့်သွင်းပေးပါ
+} | null>(null);
           setScanState('identified');
         } else {
           // အမှိုက်ကို သေချာစွာ မဖတ်နိုင်ခဲ့လျှင်
@@ -391,7 +391,7 @@ export default function EcoBinWeb() {
                 {scanState === 'identified' && (
                   <div className="absolute inset-0 bg-teal-900/60 backdrop-blur-sm flex flex-col items-center justify-center p-6 border-[4px] border-teal-400 m-8 rounded-xl">
                     <CheckCircle2 size={64} className="text-white mb-4" />
-                    <span className="text-white font-black text-2xl text-center mb-2">{detectedObject.label}</span>
+                    <span className="text-white font-black text-2xl text-center mb-2">{detectedObject.label || detectedObject.name}</span>
                     <span className="bg-white text-teal-700 font-bold px-4 py-1 rounded-full mb-8">+{detectedObject.pts} Pts</span>
                     <button onClick={confirmWasteDrop} className="w-full bg-teal-500 text-white font-bold py-4 rounded-xl shadow-lg text-lg">အမှိုက်ပစ်မည်</button>
                   </div>
