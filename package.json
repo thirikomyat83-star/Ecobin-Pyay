@@ -9,6 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@yudiel/react-qr-scanner": "^2.6.0",
+    "framer-motion": "^14.0.0",
+    "lucide-react": "^1.52.0",
     "next": "16.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
