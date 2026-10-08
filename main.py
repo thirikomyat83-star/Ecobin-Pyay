@@ -247,6 +247,8 @@ async def scan_waste(file: UploadFile = File(...)):
 # =====================================================================
 # 9. Server Run 
 # =====================================================================
-import asyncio
-
-print("🚀 Starting EcoBin API Server on http://0.0.0.0:8000")
+if __name__ == "__main__":
+    import uvicorn
+    import os
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
