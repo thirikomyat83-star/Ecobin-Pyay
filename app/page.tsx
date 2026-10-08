@@ -20,7 +20,7 @@ type Transaction = {
 };
 type ChatMessage = { id: string; role: 'user' | 'ai'; text: string; };
 
-const BACKEND_URL = "http://localhost:8000"; 
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://ecobin-pyay.onrender.com";
 
 export default function EcoBinWeb() {
   const [mounted, setMounted] = useState(false);
@@ -37,7 +37,7 @@ export default function EcoBinWeb() {
   // --- UI States ---
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [scanState, setScanState] = useState<ScanState>('idle');
-  // ✅ ပြင်ဆင်ချက်: label?: string ကို Type ထဲတွင် သေချာစွာ ထည့်သွင်းပေးထားပါသည်
+  
   const [detectedObject, setDetectedObject] = useState<{ name: string; pts: number; co2: number; label?: string }>({ name: '', pts: 0, co2: 0 });
   const [toast, setToast] = useState({ show: false, msg: '', type: 'success' });
   const [inputText, setInputText] = useState('');
@@ -158,13 +158,13 @@ export default function EcoBinWeb() {
     setScanState('idle');
   };
 
-  // --- တကယ့် AI ဖြင့် အမှိုက်ကို Scan ဖတ်ခြင်း ---
+
   const scanWasteWithAI = async () => {
     if (!videoRef.current) return;
 
     setScanState('scanning');
 
-    // ၁။ ကင်မရာမှ လက်ရှိမြင်ကွင်းကို Canvas ဖြင့် ပုံဖမ်းယူခြင်း
+    
     const canvas = document.createElement('canvas');
     canvas.width = videoRef.current.videoWidth;
     canvas.height = videoRef.current.videoHeight;
@@ -177,7 +177,7 @@ export default function EcoBinWeb() {
     }
     ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
 
-    // ၂။ ပုံကို ဖိုင် (Blob) အဖြစ်ပြောင်းလဲပြီး Backend သို့ ပို့လွှတ်ခြင်း
+   
     canvas.toBlob(async (blob) => {
       if (!blob) {
         showToastMsg("ပုံဖမ်းယူရာတွင် အမှားအယွင်းရှိပါသည်။", "error");
@@ -197,8 +197,7 @@ export default function EcoBinWeb() {
         const data = await res.json();
 
         if (res.ok && data.status === 'success') {
-          // ✅ ပြင်ဆင်ချက်: Hook Error တက်စေမည့် useState အဟောင်းကို ဖယ်ရှားပြီး 
-          // မှန်ကန်သော State Update အဖြစ် ပြောင်းလဲထားပါသည်
+          
           setDetectedObject({
             name: data.name,
             pts: data.pts,
@@ -207,7 +206,7 @@ export default function EcoBinWeb() {
           });
           setScanState('identified');
         } else {
-          // အမှိုက်ကို သေချာစွာ မဖတ်နိုင်ခဲ့လျှင်
+          
           showToastMsg(data.message || "အမှိုက်ကို သေချာစွာ မဖတ်နိုင်ပါ။", "error");
           setScanState('camera_active');
         }
