@@ -1,8 +1,7 @@
 # =====================================================================
-# 1.
+# 1. Imports
 # =====================================================================
 import os
-import nest_asyncio
 import uvicorn
 import uuid
 from fastapi import FastAPI, HTTPException, UploadFile, File 
@@ -11,39 +10,38 @@ from pydantic import BaseModel
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-# --- LangChain Classic / Agent Imports (Legacy Mode) ---
-from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
+# --- LangChain Agents & Prompts ---
+from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate
 
-# --- LangChain Tools / Core Imports (နေရာအသစ်) ---
-from langchain_core.tools import tool
-from langchain_core.tools import create_retriever_tool  
+# --- LangChain Tools ---
+from langchain_core.tools import tool, create_retriever_tool
 
 # --- Data & Vector Store Imports ---
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader, Docx2txtLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-
 import cv2
 import numpy as np
-from ultralytics import YOLO
 
 # --- Roboflow Imports (Cloud AI) ---
 from roboflow import Roboflow
 from dotenv import load_dotenv
 
 # =====================================================================
-# 2. API Keys 
+# 2. Environment Variables & Setup
 # =====================================================================
-nest_asyncio.apply()
-load_dotenv() 
+load_dotenv()
 
-os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+ROBOFLOW_API_KEY = os.getenv("ROBOFLOW_API_KEY", "")
+
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 os.environ["OPENAI_API_BASE"] = "https://openrouter.ai/api/v1"
 
 # =====================================================================
-# 3. FastAPI Application 
+# 3. FastAPI Application
 # =====================================================================
 app = FastAPI(title="EcoBin Pyay Advanced API (Roboflow Cloud Version)")
 
@@ -58,23 +56,24 @@ app.add_middleware(
 USERS_DB = {}
 
 # =====================================================================
-# 4. Roboflow AI Scanner 
+# 4. Roboflow AI Scanner
 # =====================================================================
-print("⏳ Loading Roboflow Cloud AI Model...")
+vision_model = None
 try:
-    rf = Roboflow(api_key=os.getenv("ROBOFLOW_API_KEY"))
-    vision_model = rf.workspace("grad-jhbv7").project("waste-classification-irwkg").version(1).model
-    print("✅ Roboflow Model Successfully Connected!")
+    if ROBOFLOW_API_KEY:
+        rf = Roboflow(api_key=ROBOFLOW_API_KEY)
+        vision_model = rf.workspace("grad-jhbv7").project("waste-classification-irwkg").version(1).model
+        print("✅ Roboflow Model Successfully Connected!")
+    else:
+        print("⚠️ ROBOFLOW_API_KEY မရှိသေးပါ။")
 except Exception as e:
     print("⚠️ Roboflow ချိတ်ဆက်ရာတွင် အခက်အခဲရှိနေပါသည်:", e)
-    vision_model = None
 
 # =====================================================================
-# 5. Knowledge Base 
+# 5. Knowledge Base
 # =====================================================================
 def setup_knowledge_base():
     data_dir = "./data"
-    
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
         with open(os.path.join(data_dir, "default_fact.txt"), "w", encoding="utf-8") as f:
@@ -90,21 +89,26 @@ def setup_knowledge_base():
     for loader in loaders:
         try:
             documents.extend(loader.load())
-        except Exception as e:
+        except Exception:
             pass
 
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=150)
     docs = text_splitter.split_documents(documents)
     
-    embeddings = OpenAIEmbeddings()
-    if docs:
-        vector_store = FAISS.from_documents(docs, embeddings)
-        return vector_store.as_retriever(search_kwargs={"k": 3})
+    try:
+        embeddings = OpenAIEmbeddings(
+            model="text-embedding-3-small",
+            openai_api_base="https://openrouter.ai/api/v1",
+            openai_api_key=OPENAI_API_KEY
+        )
+        if docs:
+            vector_store = FAISS.from_documents(docs, embeddings)
+            return vector_store.as_retriever(search_kwargs={"k": 3})
+    except Exception as e:
+        print("⚠️ Knowledge base build skipped/error:", e)
     return None
 
-print("⏳ Building Knowledge Base from ./data folder...")
 kb_retriever = setup_knowledge_base()
-print("✅ Knowledge Base Successfully Built!")
 
 tools = []
 if kb_retriever:
@@ -115,7 +119,7 @@ if kb_retriever:
     ))
 
 # =====================================================================
-# 6. LangChain Tools 
+# 6. LangChain Tools
 # =====================================================================
 @tool
 def get_user_stats(user_id: str) -> str:
@@ -135,7 +139,12 @@ tools.extend([get_user_stats, get_app_rewards_info])
 # =====================================================================
 # 7. AI Agent (Eco-Coach)
 # =====================================================================
-llm = ChatOpenAI(model="openai/gpt-4o-mini", temperature=0.4)
+llm = ChatOpenAI(
+    model="openai/gpt-4o-mini",
+    temperature=0.4,
+    openai_api_base="https://openrouter.ai/api/v1",
+    openai_api_key=OPENAI_API_KEY
+)
 
 system_instruction = """
 You are 'Eco-Coach', an intelligent and Kawaii AI assistant for the 'EcoBin Pyay' smart waste management app in Myanmar.
@@ -167,6 +176,10 @@ class ChatRequest(BaseModel):
     user_id: str
     message: str
 
+@app.get("/")
+def read_root():
+    return {"message": "EcoBin Pyay API is Live and Running!"}
+
 @app.post("/api/sync")
 async def sync_user_state(request: SyncRequest):
     USERS_DB[request.user_id] = {
@@ -183,13 +196,11 @@ async def chat_with_eco_coach(request: ChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail="AI အလုပ်များနေပါသည်။")
 
-
 @app.post("/api/scan")
 async def scan_waste(file: UploadFile = File(...)):
     if not vision_model:
         raise HTTPException(status_code=500, detail="Roboflow AI နှင့် ချိတ်ဆက်ထားခြင်း မရှိပါ။")
 
-    # ယာယီ File နာမည်တစ်ခုဖန်တီး၍ ပုံကိုသိမ်းခြင်း
     temp_filename = f"temp_{uuid.uuid4()}.jpg"
     with open(temp_filename, "wb") as buffer:
         buffer.write(await file.read())
@@ -197,18 +208,12 @@ async def scan_waste(file: UploadFile = File(...)):
     try:
         prediction = vision_model.predict(temp_filename).json()
         
-        print("==== AI Prediction Result ====")
-        print(prediction)
-        print("==============================")
-
         if os.path.exists(temp_filename):
             os.remove(temp_filename)
 
-       
         class_name = "unknown"
         preds = prediction.get('predictions', [])
         if preds and len(preds) > 0:
-            # Log ထဲမှာပါတဲ့ 'top' ကို တိုက်ရိုက်ယူသုံးခြင်း
             if 'top' in preds[0]:
                 class_name = preds[0]['top'].lower()
             elif 'predictions' in preds[0] and len(preds[0]['predictions']) > 0:
@@ -221,7 +226,6 @@ async def scan_waste(file: UploadFile = File(...)):
         points = 0
         co2_saved = 0.0
 
-        
         if "pet" in class_name or "plastic" in class_name or "bottle" in class_name:
             detected_label, points, co2_saved = "ပလတ်စတစ်ဘူး (PET)", 50, 0.08
         elif "can" in class_name or "metal" in class_name or "alu" in class_name:
@@ -241,14 +245,11 @@ async def scan_waste(file: UploadFile = File(...)):
     except Exception as e:
         if os.path.exists(temp_filename):
             os.remove(temp_filename)
-        print("Scan Error:", e)
         raise HTTPException(status_code=500, detail="Scan ဖတ်ရာတွင် အခက်အခဲရှိနေပါသည်။")
 
 # =====================================================================
 # 9. Server Run 
 # =====================================================================
 if __name__ == "__main__":
-    import uvicorn
-    import os
     port = int(os.environ.get("PORT", 10000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=port)
