@@ -137,7 +137,11 @@ llm = ChatOpenAI(
     model="google/gemini-3.8-flash",
     temperature=0.4,
     base_url="https://openrouter.ai/api/v1",
-    api_key=OPENAI_API_KEY
+    api_key=OPENAI_API_KEY,
+    default_headers={
+        "HTTP-Referer": "https://ecobin-pyay.onrender.com",
+        "X-Title": "EcoBin Pyay"
+    }
 )
 
 system_instruction = """
@@ -185,7 +189,7 @@ async def sync_user_state(request: SyncRequest):
 @app.post("/api/chat")
 async def chat_with_eco_coach(request: ChatRequest):
     try:
-        response = agent_executor.invoke({"input": f"[User ID: {request.user_id}] \nUser Message: {request.message}"})
+        response = await agent_executor.ainvoke({"input": f"[User ID: {request.user_id}] \nUser Message: {request.message}"})
         return {"reply": response["output"]}
     except Exception as e:
         # ✅ ပြင်ဆင်ချက်: Error အတိအကျကို Log ထဲတွင် ပြပေးရန် ထည့်သွင်းထားပါသည်
