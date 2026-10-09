@@ -1,12 +1,14 @@
-# =====================================================================
-# 1. Imports
-# =====================================================================
 import os
 import uvicorn
 import uuid
+import nest_asyncio
+import traceback
+import httpx
 from fastapi import FastAPI, HTTPException, UploadFile, File 
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+nest_asyncio.apply()
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
@@ -21,20 +23,17 @@ import numpy as np
 from roboflow import Roboflow
 from dotenv import load_dotenv
 
-# =====================================================================
-# 2. Environment Variables & Setup
-# =====================================================================
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 ROBOFLOW_API_KEY = os.getenv("ROBOFLOW_API_KEY", "")
 
-os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
-os.environ["OPENAI_API_BASE"] = "https://openrouter.ai/api/v1"
+OR_HEADERS = {
+    "HTTP-Referer": "https://ecobin-pyay.onrender.com",
+    "X-Title": "EcoBin Pyay"
+}
+safe_http_client = httpx.Client(timeout=httpx.Timeout(60.0))
 
-# =====================================================================
-# 3. FastAPI Application
-# =====================================================================
 app = FastAPI(title="EcoBin Pyay Advanced API (Roboflow Cloud Version)")
 
 app.add_middleware(
@@ -47,9 +46,6 @@ app.add_middleware(
 
 USERS_DB = {}
 
-# =====================================================================
-# 4. Roboflow AI Scanner
-# =====================================================================
 vision_model = None
 try:
     if ROBOFLOW_API_KEY:
@@ -61,9 +57,6 @@ try:
 except Exception as e:
     print("⚠️ Roboflow ချိတ်ဆက်ရာတွင် အခက်အခဲရှိနေပါသည်:", e)
 
-# =====================================================================
-# 5. Knowledge Base
-# =====================================================================
 def setup_knowledge_base():
     data_dir = "./data"
     if not os.path.exists(data_dir):
@@ -88,11 +81,12 @@ def setup_knowledge_base():
     docs = text_splitter.split_documents(documents)
     
     try:
-        # ✅ ပြင်ဆင်ချက်: base_url နှင့် api_key အခေါ်အဝေါ် အမှန်ပြင်ဆင်ထားပါသည်
         embeddings = OpenAIEmbeddings(
-            model="text-embedding-3-small",
+            model="openai/text-embedding-3-small",
             base_url="https://openrouter.ai/api/v1",
-            api_key=OPENAI_API_KEY
+            api_key=OPENAI_API_KEY,
+            default_headers=OR_HEADERS,
+            http_client=safe_http_client
         )
         if docs:
             vector_store = FAISS.from_documents(docs, embeddings)
@@ -111,9 +105,6 @@ if kb_retriever:
         "Use this tool to search for official information, environment laws, global warming facts, and details about Irrawaddy dolphins. Translate the concept into Burmese."
     ))
 
-# =====================================================================
-# 6. LangChain Tools
-# =====================================================================
 @tool
 def get_user_stats(user_id: str) -> str:
     """Check the user's current points, level, and CO2 saved in EcoBin Pyay app."""
@@ -129,19 +120,13 @@ def get_app_rewards_info() -> str:
 
 tools.extend([get_user_stats, get_app_rewards_info])
 
-# =====================================================================
-# 7. AI Agent (Eco-Coach)
-# =====================================================================
-# ✅ ပြင်ဆင်ချက်: openai_api_base အစား base_url ကို အသုံးပြုထားပါသည်
 llm = ChatOpenAI(
-    model="google/gemini-3.8-flash",
+    model="openai/gpt-4o-mini",
     temperature=0.4,
     base_url="https://openrouter.ai/api/v1",
     api_key=OPENAI_API_KEY,
-    default_headers={
-        "HTTP-Referer": "https://ecobin-pyay.onrender.com",
-        "X-Title": "EcoBin Pyay"
-    }
+    default_headers=OR_HEADERS,
+    http_client=safe_http_client
 )
 
 system_instruction = """
@@ -161,9 +146,6 @@ prompt = ChatPromptTemplate.from_messages([
 agent = create_tool_calling_agent(llm, tools, prompt)
 agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=False)
 
-# =====================================================================
-# 8. API Routes
-# =====================================================================
 class SyncRequest(BaseModel):
     user_id: str
     current_points: int
@@ -179,7 +161,7 @@ def read_root():
     return {"message": "EcoBin Pyay API is Live and Running!"}
 
 @app.post("/api/sync")
-async def sync_user_state(request: SyncRequest):
+def sync_user_state(request: SyncRequest):
     USERS_DB[request.user_id] = {
         "name": request.user_id, "points": request.current_points,
         "level": request.level, "total_co2_saved": request.total_co2
@@ -187,14 +169,13 @@ async def sync_user_state(request: SyncRequest):
     return {"status": "success"}
 
 @app.post("/api/chat")
-async def chat_with_eco_coach(request: ChatRequest):
+def chat_with_eco_coach(request: ChatRequest):
     try:
-        response = await agent_executor.ainvoke({"input": f"[User ID: {request.user_id}] \nUser Message: {request.message}"})
+        response = agent_executor.invoke({"input": f"[User ID: {request.user_id}] \nUser Message: {request.message}"})
         return {"reply": response["output"]}
     except Exception as e:
-        # ✅ ပြင်ဆင်ချက်: Error အတိအကျကို Log ထဲတွင် ပြပေးရန် ထည့်သွင်းထားပါသည်
         print("====== AI CHAT ERROR ======")
-        print(e)
+        traceback.print_exc()
         print("===========================")
         raise HTTPException(status_code=500, detail="AI အလုပ်များနေပါသည်။")
 
@@ -249,9 +230,6 @@ async def scan_waste(file: UploadFile = File(...)):
             os.remove(temp_filename)
         raise HTTPException(status_code=500, detail="Scan ဖတ်ရာတွင် အခက်အခဲရှိနေပါသည်။")
 
-# =====================================================================
-# 9. Server Run 
-# =====================================================================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
