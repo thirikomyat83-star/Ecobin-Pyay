@@ -1,6 +1,7 @@
 import os
 import uvicorn
 import uuid
+import asyncio
 import nest_asyncio
 import traceback
 import httpx
@@ -169,9 +170,12 @@ def sync_user_state(request: SyncRequest):
     return {"status": "success"}
 
 @app.post("/api/chat")
-def chat_with_eco_coach(request: ChatRequest):
+async def chat_with_eco_coach(request: ChatRequest):
     try:
-        response = agent_executor.invoke({"input": f"[User ID: {request.user_id}] \nUser Message: {request.message}"})
+        response = await asyncio.to_thread(
+            agent_executor.invoke,
+            {"input": f"[User ID: {request.user_id}] \nUser Message: {request.message}"}
+        )
         return {"reply": response["output"]}
     except Exception as e:
         print("====== AI CHAT ERROR ======")
