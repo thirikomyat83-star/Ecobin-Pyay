@@ -134,7 +134,7 @@ tools.extend([get_user_stats, get_app_rewards_info])
 # =====================================================================
 # ✅ ပြင်ဆင်ချက်: openai_api_base အစား base_url ကို အသုံးပြုထားပါသည်
 llm = ChatOpenAI(
-    model="openai/gpt-4o-mini",
+    model="google/gemini-3.8-flash",
     temperature=0.4,
     base_url="https://openrouter.ai/api/v1",
     api_key=OPENAI_API_KEY
