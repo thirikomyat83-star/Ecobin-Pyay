@@ -5,6 +5,7 @@ import asyncio
 import nest_asyncio
 import traceback
 import httpx
+import sqlite3
 from fastapi import FastAPI, HTTPException, UploadFile, File 
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -45,7 +46,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-USERS_DB = {}
+DB_FILE = "ecobin.db"
+
+def init_db():
+    with sqlite3.connect(DB_FILE) as conn:
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS users
+                     (user_id TEXT PRIMARY KEY, points INTEGER, level INTEGER, total_co2 REAL)''')
+        conn.commit()
+
+init_db()
+
+def get_user_from_db(user_id: str):
+    with sqlite3.connect(DB_FILE) as conn:
+        c = conn.cursor()
+        c.execute("SELECT points, level, total_co2 FROM users WHERE user_id=?", (user_id,))
+        return c.fetchone()
+
+def save_user_to_db(user_id: str, points: int, level: int, co2: float):
+    with sqlite3.connect(DB_FILE) as conn:
+        c = conn.cursor()
+        c.execute("INSERT OR REPLACE INTO users (user_id, points, level, total_co2) VALUES (?, ?, ?, ?)",
+                  (user_id, points, level, co2))
+        conn.commit()
 
 vision_model = None
 try:
@@ -59,7 +82,9 @@ except Exception as e:
     print("⚠️ Roboflow ချိတ်ဆက်ရာတွင် အခက်အခဲရှိနေပါသည်:", e)
 
 def setup_knowledge_base():
-    data_dir = "./data"
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(base_dir, "data")
+    
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
         with open(os.path.join(data_dir, "default_fact.txt"), "w", encoding="utf-8") as f:
@@ -83,7 +108,7 @@ def setup_knowledge_base():
     
     try:
         embeddings = OpenAIEmbeddings(
-            model="openai/text-embedding-3-small",
+            model="nomic-ai/nomic-embed-text-v1.5",
             base_url="https://openrouter.ai/api/v1",
             api_key=OPENAI_API_KEY,
             default_headers=OR_HEADERS,
@@ -109,10 +134,10 @@ if kb_retriever:
 @tool
 def get_user_stats(user_id: str) -> str:
     """Check the user's current points, level, and CO2 saved in EcoBin Pyay app."""
-    user = USERS_DB.get(user_id)
+    user = get_user_from_db(user_id)
     if user:
-        return f"User '{user['name']}' has {user['points']} points, is at Level {user['level']}, and saved {user['total_co2_saved']} kg of CO2."
-    return "User account not found."
+        return f"User '{user_id}' has {user[0]} points, is at Level {user[1]}, and saved {user[2]} kg of CO2."
+    return f"User '{user_id}' account not found or has 0 points."
 
 @tool
 def get_app_rewards_info() -> str:
@@ -163,17 +188,16 @@ async def read_root():
 
 @app.post("/api/sync")
 async def sync_user_state(request: SyncRequest):
-    USERS_DB[request.user_id] = {
-        "name": request.user_id,
-        "points": request.current_points,
-        "level": request.level,
-        "total_co2_saved": request.total_co2
-    }
+    save_user_to_db(request.user_id, request.current_points, request.level, request.total_co2)
     return {"status": "success"}
 
 @app.post("/api/chat")
 async def chat_with_eco_coach(request: ChatRequest):
     try:
+        user = get_user_from_db(request.user_id)
+        if not user:
+            save_user_to_db(request.user_id, 0, 1, 0.0)
+            
         response = await asyncio.to_thread(
             agent_executor.invoke,
             {"input": f"[User ID: {request.user_id}] \nUser Message: {request.message}"}
