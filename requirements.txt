@@ -11,3 +11,4 @@ roboflow
 python-dotenv
 pypdf
 docx2txt
+nest-asyncio
