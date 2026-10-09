@@ -26,8 +26,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-ROBOFLOW_API_KEY = os.getenv("ROBOFLOW_API_KEY", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+ROBOFLOW_API_KEY = os.getenv("ROBOFLOW_API_KEY", "").strip()
 
 OR_HEADERS = {
     "HTTP-Referer": "https://ecobin-pyay.onrender.com",
@@ -158,14 +158,16 @@ class ChatRequest(BaseModel):
     message: str
 
 @app.get("/")
-def read_root():
+async def read_root():
     return {"message": "EcoBin Pyay API is Live and Running!"}
 
 @app.post("/api/sync")
-def sync_user_state(request: SyncRequest):
+async def sync_user_state(request: SyncRequest):
     USERS_DB[request.user_id] = {
-        "name": request.user_id, "points": request.current_points,
-        "level": request.level, "total_co2_saved": request.total_co2
+        "name": request.user_id,
+        "points": request.current_points,
+        "level": request.level,
+        "total_co2_saved": request.total_co2
     }
     return {"status": "success"}
 
